@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.trycloudflare.com https://*.ts.net; object-src 'none'; base-uri 'none'">
+<title>Велотренер</title>
+<script src="https://telegram.org/js/telegram-web-app.js?64"></script>
+<style>
+/* Дизайн: монохром + один сигнальный акцент; узкий гротеск для заголовков и чисел, моноширинные подписи,
+   тонкие линии вместо заливок. Темы — из Telegram (themeParams), свои значения — запасные. */
+@font-face { font-family: "Oswald"; font-weight: 400 700; font-display: swap; src: url("fonts/oswald-cyrillic.woff2") format("woff2");
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Oswald"; font-weight: 400 700; font-display: swap; src: url("fonts/oswald-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+:root {
+  color-scheme: light;
+  --paper: var(--tg-theme-bg-color, #f6f5f1); --card: var(--tg-theme-secondary-bg-color, #ecebe5);
+  --ink: var(--tg-theme-text-color, #111110); --mute: var(--tg-theme-hint-color, #6f6e69);
+  --hair: color-mix(in srgb, var(--ink) 14%, transparent); --hair-strong: color-mix(in srgb, var(--ink) 32%, transparent);
+  --signal: #c8f031; --on-signal: #111110;
+  --series-1: #2a78d6; --series-2: #eb6834;
+  --good: #0ca30c; --warning: #fab219; --critical: #d03b3b;
+  --display: "Oswald", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Roboto Mono", Menlo, monospace;
+  --body: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+  --radius: 6px; --pad: 18px;
+}
+:root[data-theme="dark"] { color-scheme: dark; --paper: var(--tg-theme-bg-color, #121211); --card: var(--tg-theme-secondary-bg-color, #1d1d1b);
+  --ink: var(--tg-theme-text-color, #f2f1ec); --mute: var(--tg-theme-hint-color, #9d9c95); --series-1: #3987e5; --series-2: #d95926; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--paper); color: var(--ink); }
+body { font: 15px/1.45 var(--body); padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+button, input { font: inherit; color: inherit; }
+.label { font: 500 11px/1.3 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
+.display { font-family: var(--display); font-weight: 700; text-transform: uppercase; letter-spacing: .005em; line-height: .98; }
+.num { font-family: var(--display); font-weight: 500; font-variant-numeric: tabular-nums; line-height: 1; }
+header.top { padding: calc(14px + env(safe-area-inset-top)) var(--pad) 10px; display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
+header.top h1 { margin: 4px 0 0; font-size: 34px; }
+.status { display: none; margin: 0 var(--pad) 10px; padding: 10px 12px; border: 1px solid var(--hair-strong); border-radius: var(--radius); font-size: 13px; }
+.status b { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; display: block; margin-bottom: 2px; }
+body.offline .status { display: block; }
+body.offline .act { opacity: .4; pointer-events: none; }
+main { padding: 0 var(--pad) 12px; max-width: 680px; margin: 0 auto; }
+section { padding: 16px 0; border-top: 1px solid var(--hair); }
+section:first-child { border-top: 0; padding-top: 4px; }
+.sec-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+.card { border: 1px solid var(--hair); border-radius: var(--radius); padding: 14px; background: color-mix(in srgb, var(--card) 45%, transparent); }
+.stack > * + * { margin-top: 10px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.between { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.muted { color: var(--mute); font-size: 13px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font: 500 11px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase;
+  padding: 6px 9px; border-radius: 999px; border: 1px solid var(--hair-strong); white-space: nowrap; }
+.chip.key { background: var(--signal); color: var(--on-signal); border-color: transparent; }
+.chip .dot, .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+.btn { border: 1px solid var(--ink); background: transparent; border-radius: 999px; padding: 10px 16px; cursor: pointer; font-weight: 600; font-size: 14px; }
+.btn.primary { background: var(--ink); color: var(--paper); }
+.btn.ghost { border-color: var(--hair-strong); font-weight: 500; }
+.btn:disabled { opacity: .45; }
+.btn:active { transform: scale(.98); }
+:focus-visible { outline: 2px solid var(--series-1); outline-offset: 2px; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair); }
+.stat { padding: 10px 0 12px; }
+.stat + .stat { border-left: 1px solid var(--hair); padding-left: 12px; }
+.stat .num { font-size: 34px; display: block; margin-top: 4px; }
+.stat .unit { font: 500 12px var(--mono); color: var(--mute); margin-left: 2px; }
+.hero-title { font-size: 40px; margin: 6px 0 12px; overflow-wrap: anywhere; }
+.profile { margin: 12px 0 4px; }
+.reasons { margin: 8px 0 0; padding: 0; list-style: none; }
+.reasons li { padding: 6px 0; border-top: 1px solid var(--hair); font-size: 14px; }
+.rich { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; }
+.rich b { font-weight: 650; }
+.rich blockquote { margin: 6px 0; padding-left: 10px; border-left: 2px solid var(--hair-strong); }
+details.more summary { cursor: pointer; list-style: none; font: 500 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--mute); padding: 6px 0; }
+details.more summary::-webkit-details-marker { display: none; }
+details.more[open] summary { margin-bottom: 6px; }
+.metric { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 10px 0; border-top: 1px solid var(--hair); }
+.metric:first-child { border-top: 0; }
+.metric .num { font-size: 24px; text-align: right; }
+/* календарь */
+.week { display: grid; grid-template-columns: repeat(7, 1fr); border: 1px solid var(--hair); border-radius: var(--radius); overflow: hidden; }
+.day { border: 0; border-left: 1px solid var(--hair); background: none; padding: 8px 2px 10px; text-align: center; cursor: pointer; min-height: 92px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.day:first-child { border-left: 0; }
+.day .wd { font: 500 10px var(--mono); text-transform: uppercase; color: var(--mute); letter-spacing: .06em; }
+.day .dn { font-family: var(--display); font-size: 22px; line-height: 1; }
+.day .ty { font: 600 11px var(--body); line-height: 1.15; overflow-wrap: anywhere; }
+.day .mk { font: 500 11px var(--mono); color: var(--mute); }
+.day.is-today .dn { text-decoration: underline; text-decoration-color: var(--signal); text-decoration-thickness: 4px; text-underline-offset: 4px; }
+.day[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.day[aria-pressed="true"] .wd, .day[aria-pressed="true"] .mk { color: color-mix(in srgb, var(--paper) 70%, transparent); }
+.day .keydot { width: 6px; height: 6px; border-radius: 50%; background: var(--signal); }
+/* история */
+.search { width: 100%; border: 1px solid var(--hair-strong); background: transparent; border-radius: 999px; padding: 12px 16px; font-size: 16px; }
+.item { display: grid; grid-template-columns: 54px 1fr auto; gap: 12px; align-items: center; padding: 12px 0; border-top: 1px solid var(--hair); background: none; border-left: 0; border-right: 0; border-bottom: 0; width: 100%; text-align: left; cursor: pointer; }
+.item .when { font-family: var(--display); font-size: 20px; line-height: 1; }
+.item .when small { display: block; font: 500 10px var(--mono); color: var(--mute); text-transform: uppercase; margin-top: 3px; }
+.item .name { font-weight: 600; overflow-wrap: anywhere; }
+.item .meta { font: 12px var(--mono); color: var(--mute); margin-top: 2px; }
+/* графики */
+.chart { position: relative; margin-top: 8px; }
+.chart svg { display: block; }
+svg text { fill: var(--mute); font: 10px var(--mono); }
+.legend { display: flex; gap: 14px; font: 11px var(--mono); color: var(--mute); text-transform: uppercase; margin-top: 8px; flex-wrap: wrap; }
+.tip { position: absolute; pointer-events: none; background: var(--paper); border: 1px solid var(--hair-strong); border-radius: 4px; padding: 4px 8px; font: 11px var(--mono); display: none; white-space: nowrap; }
+.small-multiples { display: grid; gap: 0; }
+.sm { padding: 12px 0; border-top: 1px solid var(--hair); }
+/* навигация */
+nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 4; display: grid; grid-template-columns: repeat(5, 1fr);
+  background: color-mix(in srgb, var(--paper) 92%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid var(--hair); padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); }
+nav.tabs button { background: none; border: 0; padding: 4px 0; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; color: var(--mute); }
+nav.tabs svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.7; }
+nav.tabs span { font: 500 10px var(--mono); letter-spacing: .05em; text-transform: uppercase; }
+nav.tabs button[aria-selected="true"] { color: var(--ink); }
+nav.tabs button[aria-selected="true"] i { display: block; width: 18px; height: 3px; border-radius: 2px; background: var(--signal); }
+nav.tabs i { display: block; width: 18px; height: 3px; }
+/* лист */
+.sheet { position: fixed; inset: 0; z-index: 6; background: color-mix(in srgb, #000 40%, transparent); display: none; }
+.sheet.open { display: block; }
+.sheet > div { position: absolute; left: 0; right: 0; bottom: 0; max-height: 90vh; overflow: auto; background: var(--paper);
+  border-radius: 14px 14px 0 0; padding: 18px var(--pad) calc(18px + env(safe-area-inset-bottom)); }
+.sheet .grab { width: 40px; height: 4px; border-radius: 2px; background: var(--hair-strong); margin: -6px auto 12px; }
+.toast { position: fixed; left: 50%; bottom: calc(86px + env(safe-area-inset-bottom)); transform: translateX(-50%) translateY(8px); z-index: 7;
+  background: var(--ink); color: var(--paper); padding: 10px 14px; border-radius: 999px; font-size: 13px; opacity: 0; transition: opacity .2s, transform .2s; max-width: 92vw; }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.skeleton { height: 120px; border-radius: var(--radius); background: linear-gradient(90deg, var(--card), color-mix(in srgb, var(--card) 50%, var(--paper)), var(--card)); background-size: 200% 100%; animation: sh 1.2s infinite linear; }
+@keyframes sh { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } .toast { transition: none; } }
+label.switch { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--hair); }
+label.switch input { width: 46px; height: 28px; appearance: none; border-radius: 999px; background: var(--hair-strong); position: relative; cursor: pointer; flex: none; }
+label.switch input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--paper); transition: left .15s; }
+label.switch input:checked { background: var(--ink); }
+label.switch input:checked::after { left: 21px; }
+.kv { display: grid; grid-template-columns: 1fr auto; gap: 0; }
+.kv > div { padding: 10px 0; border-top: 1px solid var(--hair); }
+.kv > div:nth-child(even) { text-align: right; font: 13px var(--mono); }
+.empty { padding: 28px 0; text-align: center; color: var(--mute); }
+</style>
+</head>
+<body>
+<header class="top">
+  <div><div class="label" id="kicker"></div><h1 class="display" id="title">Сегодня</h1></div>
+  <div class="label" id="fresh"></div>
+</header>
+<div class="status" id="status" role="status"></div>
+<main id="view" tabindex="-1"></main>
+<nav class="tabs" role="tablist" aria-label="Разделы">
+  <button role="tab" data-tab="today"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></svg><span>Сегодня</span><i></i></button>
+  <button role="tab" data-tab="calendar"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="1.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><span>План</span><i></i></button>
+  <button role="tab" data-tab="history"><svg viewBox="0 0 24 24"><path d="M4 18l4-6 4 3 4-7 4 5"/><path d="M4 21h16"/></svg><span>История</span><i></i></button>
+  <button role="tab" data-tab="form"><svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg><span>Форма</span><i></i></button>
+  <button role="tab" data-tab="more"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg><span>Ещё</span><i></i></button>
+</nav>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle"><div id="sheetBody" tabindex="-1"></div></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script>
+"use strict";
+const tg = window.Telegram && window.Telegram.WebApp;
+const $ = (s, r = document) => r.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const WD = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
+const MON = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
+const D = (iso) => new Date(iso + "T12:00:00Z");
+const ddmm = (iso) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}`;
+const longDate = (iso) => { const d = D(iso); return `${WD[d.getUTCDay()]}, ${d.getUTCDate()} ${MON[d.getUTCMonth()]}`; };
+const fmtTs = (t) => new Date(t).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+const SHORT = { endurance: "Z2", recovery: "Восст.", tempo: "Темп", sweet_spot: "SS", threshold: "Порог", vo2max: "VO2",
+  anaerobic: "Анаэр.", sprint: "Спринт", long_ride: "Длит.", race_specific: "Спец.", strength: "Сила", race: "Старт", rest: "Отдых" };
+const REC = { green: ["good", "Готов к работе"], amber: ["warning", "Осторожно"], red: ["critical", "Отдых"] };
+
+// ---------- тема Telegram
+function applyTheme() { document.documentElement.dataset.theme = tg && tg.colorScheme === "dark" ? "dark"
+  : (!tg && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); }
+if (tg) { tg.ready(); tg.expand(); tg.onEvent("themeChanged", applyTheme); }
+applyTheme();
+
+// ---------- адрес API: ?api=… от бота (быстрый туннель или постоянный адрес); иначе — тот же сайт (Mac/Funnel)
+const INIT = tg ? tg.initData : "";
+const API_RE = /^https:\/\/([a-z0-9-]+\.trycloudflare\.com|[a-z0-9-]+(\.[a-z0-9-]+)*\.ts\.net)$/;
+const API = (() => {
+  const p = new URLSearchParams(location.search).get("api");
+  if (p && API_RE.test(p)) { try { localStorage.setItem("coach-api", p); } catch (e) {} return p; }
+  if (!/github\.io$/.test(location.hostname)) return "";  // открыто с самого Mac
+  const saved = localStorage.getItem("coach-api");
+  return saved && API_RE.test(saved) ? saved : null;
+})();
+const CACHE = "coach-cache:";
+let lastFresh = null;
+async function api(path) {
+  if (API === null) { status("no-api"); throw Object.assign(new Error("no api"), { offline: true }); }
+  try {
+    const r = await fetch(API + path, { headers: { "X-Telegram-Init-Data": INIT }, cache: "no-store" });
+    if (r.status === 401) throw Object.assign(new Error("auth"), { auth: true });
+    if (!r.ok) throw new Error(String(r.status));
+    const data = await r.json();
+    try { localStorage.setItem(CACHE + path, JSON.stringify({ at: Date.now(), data })); } catch (e) {}
+    status(null); lastFresh = Date.now(); setFresh();
+    return data;
+  } catch (e) {
+    if (e.auth) { status("auth"); throw e; }
+    const c = JSON.parse(localStorage.getItem(CACHE + path) || "null");
+    status("offline", c && c.at);
+    if (c) { lastFresh = c.at; setFresh(); return c.data; }
+    throw Object.assign(e, { offline: true });
+  }
+}
+async function post(name, body) {
+  const r = await fetch(`${API || ""}/api/act/${name}`, { method: "POST", cache: "no-store",
+    headers: { "X-Telegram-Init-Data": INIT, "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+  if (!r.ok) throw new Error(String(r.status));
+  return r.json();
+}
+function status(kind, at) {
+  const el = $("#status");
+  if (!kind) { document.body.classList.remove("offline"); return; }
+  document.body.classList.add("offline");
+  el.innerHTML = kind === "auth" ? `<b>Нет доступа</b>Приложение открывается только из чата с ботом, для владельца.`
+    : kind === "no-api" ? `<b>Нет адреса сервера</b>Открой приложение кнопкой «Приложение» в меню чата с ботом.`
+    : `<b>Mac не отвечает</b>Он спит, выключен или нет сети — либо бот перезапустился и адрес сменился (открой приложение заново из меню чата). `
+      + (at ? `Показаны данные, сохранённые на этом телефоне ${fmtTs(at)}. Действия недоступны.` : `Сохранённых данных на этом телефоне нет.`);
+}
+function setFresh() { $("#fresh").textContent = lastFresh ? "данные " + fmtTs(lastFresh) : ""; }
+
+// HTML ответов бота (подмножество Telegram): только разрешённые теги, ссылки только https
+const ALLOWED = new Set(["B", "STRONG", "I", "EM", "U", "S", "CODE", "PRE", "A", "BLOCKQUOTE", "BR"]);
+function rich(html) {
+  const tpl = document.createElement("template");
+  tpl.innerHTML = String(html || "").replace(/\f/g, "\n\n");
+  const walk = (node) => [...node.childNodes].forEach((n) => {
+    if (n.nodeType === 1) {
+      walk(n);
+      if (!ALLOWED.has(n.tagName)) { n.replaceWith(...n.childNodes); return; }
+      [...n.attributes].forEach((a) => { if (!(n.tagName === "A" && a.name === "href")) n.removeAttribute(a.name); });
+      if (n.tagName === "A") { if (!/^https:\/\//.test(n.getAttribute("href") || "")) n.removeAttribute("href");
+        n.setAttribute("target", "_blank"); n.setAttribute("rel", "noopener"); }
+    } else if (n.nodeType !== 3) n.remove();
+  });
+  walk(tpl.content);
+  const div = document.createElement("div"); div.className = "rich"; div.append(tpl.content); return div.outerHTML;
+}
+
+// ---------- оболочка
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 2800); }
+function haptic(kind) { if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred(kind); }
+function openSheet(html) { $("#sheetBody").innerHTML = `<div class="grab"></div>${html}`; $("#sheet").classList.add("open"); if (tg) tg.BackButton.show(); $("#sheetBody").focus(); }
+function closeSheet() { $("#sheet").classList.remove("open"); if (tg) tg.BackButton.hide(); }
+$("#sheet").addEventListener("click", (e) => { if (e.target.id === "sheet" || e.target.closest("[data-close]")) closeSheet(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
+if (tg) tg.BackButton.onClick(closeSheet);
+const toChat = () => (tg ? tg.close() : toast("Вернись в чат с ботом"));
+
+async function doAct(btn, name, body, after) {
+  btn.disabled = true;
+  try {
+    const r = await post(name, body);
+    haptic(r.ok ? "success" : "warning");
+    if (r.html) openSheet(`<div class="label">Готово</div><h2 id="sheetTitle" class="display" style="font-size:28px;margin:6px 0 12px">${esc(btn.textContent)}</h2>${rich(r.html)}
+      <div class="row" style="margin-top:14px"><button class="btn primary" data-close>Закрыть</button></div>`);
+    else toast(r.text || "Готово");
+    if (after) after();
+  } catch (e) { haptic("error"); toast("Не получилось: Mac не отвечает. Попробуй позже или напиши в чат."); }
+  finally { btn.disabled = false; }
+}
+
+const TABS = { today: ["Сегодня", ""], calendar: ["План", "календарь"], history: ["История", "занятия и разборы"],
+  form: ["Форма", "нагрузка и здоровье"], more: ["Ещё", "настройки и данные"] };
+let current = null;
+async function show(name) {
+  current = name;
+  $("#title").textContent = TABS[name][0];
+  $("#kicker").textContent = TABS[name][1];
+  document.querySelectorAll("nav.tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
+  $("#view").innerHTML = `<div class="skeleton"></div>`;
+  try { await VIEWS[name]($("#view")); }
+  catch (e) { if (current === name) $("#view").innerHTML = `<p class="empty">${e.auth ? "Нет доступа." : "Данных нет: Mac не отвечает, а на телефоне ещё ничего не сохранено."}</p>`; }
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll("nav.tabs button").forEach((b) => b.addEventListener("click", () => { if (tg && tg.HapticFeedback) tg.HapticFeedback.selectionChanged(); show(b.dataset.tab); }));
+
+// ---------- компоненты
+function profile(steps, h = 64) {
+  if (!steps || !steps.length) return "";
+  const W = 1000, total = steps.reduce((a, s) => a + s[0], 0), top = Math.max(1.2, ...steps.map((s) => s[1]));
+  let x = 0;
+  const bars = steps.map(([dur, p, work]) => { const w = (dur / total) * W, bh = Math.max(4, (p / top) * (h - 4));
+    const r = `<rect x="${(x + 1).toFixed(1)}" y="${(h - bh).toFixed(1)}" width="${Math.max(1, w - 2).toFixed(1)}" height="${bh.toFixed(1)}" rx="3" fill="${work ? "var(--ink)" : "var(--hair-strong)"}"/>`;
+    x += w; return r; }).join("");
+  const ftp = h - (1 / top) * (h - 4);
+  return `<svg class="profile" viewBox="0 0 ${W} ${h}" preserveAspectRatio="none" width="100%" height="${h}" role="img" aria-label="Структура тренировки">
+    ${bars}<line x1="0" x2="${W}" y1="${ftp}" y2="${ftp}" stroke="var(--series-1)" stroke-dasharray="6 6" vector-effect="non-scaling-stroke"/></svg>
+    <div class="between label"><span>структура · высота = мощность</span><span style="color:var(--series-1)">— 100% FTP</span></div>`;
+}
+function sessionCard(s, date, actions) {
+  const hm = (m) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
+  const st = s.status === "done" ? "выполнено" : s.status === "missed" ? "пропущено" : s.status === "replaced" ? "заменено" : "в плане";
+  return `<article class="card stack">
+    <div class="between"><span class="label">${esc(longDate(date))}</span>
+      <span class="row">${s.key ? `<span class="chip key">ключевая</span>` : ""}<span class="chip">${st}</span></span></div>
+    <h2 class="display hero-title">${esc(s.name)}</h2>
+    <div class="stats"><div class="stat"><span class="label">время</span><span class="num">${hm(s.minutes)}</span></div>
+      <div class="stat"><span class="label">нагрузка</span><span class="num">${s.load ?? "—"}<span class="unit">TSS</span></span></div>
+      <div class="stat"><span class="label">тип</span><span class="num" style="font-size:24px">${esc(SHORT[s.type] || s.type)}</span></div></div>
+    ${profile(s.steps)}
+  </article>`;
+}
+function actionButtons(date, a) {
+  return [a.zwift && `<button class="btn primary act" data-a="zwift" data-date="${date}">В Zwift</button>`,
+    a.zwift_alt && `<button class="btn act" data-a="zwift_alt" data-date="${date}">Велосипед в Zwift</button>`,
+    a.swap && `<button class="btn act" data-a="swap" data-date="${date}">Заменить силовую</button>`].filter(Boolean).join("");
+}
+function bindActions(root, refresh) {
+  root.querySelectorAll("[data-a]").forEach((b) => b.addEventListener("click", () => {
+    const a = b.dataset.a, d = b.dataset.date;
+    if (a === "zwift") doAct(b, "zwift", { date: d });
+    if (a === "zwift_alt") doAct(b, "zwift", { date: d, alternative: true });
+    if (a === "swap") doAct(b, "swap", { date: d }, refresh);
+  }));
+}
+function recoveryBlock(r) {
+  const [tone, label] = REC[r.level] || REC.green;
+  const flags = [r.rest && "день отдыха", r.no_intensity && "без интенсивности"].filter(Boolean);
+  return `<div class="between"><span class="label">восстановление · engine</span>
+      <span class="chip"><span class="dot" style="background:var(--${tone})"></span>${label}</span></div>
+    ${flags.length ? `<div class="muted" style="margin-top:6px">${flags.join(" · ")}</div>` : ""}
+    ${r.reasons.length ? `<ul class="reasons">${r.reasons.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : `<p class="muted">Признаков недовосстановления нет.</p>`}`;
+}
+
+// ---------- экраны
+const VIEWS = {
+  async today(el) {
+    const t = await api("/api/today");
+    $("#kicker").textContent = longDate(t.today);
+    const f = t.form;
+    el.innerHTML = `
+      <section>${t.sessions.length ? t.sessions.map((s) => sessionCard(s, t.today)).join("") : `<div class="card"><div class="label">${esc(longDate(t.today))}</div><h2 class="display hero-title">Отдых</h2></div>`}
+        <div class="row" style="margin-top:12px">${actionButtons(t.today, t.actions)}<button class="btn ghost" id="why">Почему так</button></div>
+        <details class="more" style="margin-top:10px"><summary>Карточка дня полностью</summary>${rich(t.plan_html)}</details></section>
+      <section>${recoveryBlock(t.recovery)}</section>
+      ${f ? `<section><div class="sec-head"><span class="label">форма · Intervals · ${ddmm(f.date)}</span></div>
+        <div class="stats"><div class="stat"><span class="label">CTL фитнес</span><span class="num">${Math.round(f.ctl)}</span></div>
+          <div class="stat"><span class="label">ATL усталость</span><span class="num">${Math.round(f.atl)}</span></div>
+          <div class="stat"><span class="label">TSB форма</span><span class="num">${f.ctl - f.atl > 0 ? "+" : ""}${Math.round(f.ctl - f.atl)}</span></div></div></section>` : ""}
+      <section><div class="sec-head"><span class="label">утро · данные часов</span></div>
+        ${t.metrics.map((m) => `<div class="metric"><div><div>${esc(m.label)}</div><div class="label" style="margin-top:2px">${esc(m.source)} · ${esc(m.date)}</div>
+          ${m.note ? `<div class="muted">${esc(m.note)}</div>` : ""}</div>
+          <div class="num">${m.value == null ? `<span class="muted" style="font:13px var(--body)">нет данных</span>` : esc(m.value) + (m.unit ? `<span class="unit"> ${esc(m.unit)}</span>` : "")}</div></div>`).join("")}</section>
+      <section><details class="more"><summary>Состояние полностью</summary>${rich(t.state_html)}</details>
+        <p class="muted">Самочувствие, боль, время на тренировку — напиши в чат.</p><button class="btn ghost" id="chat">Вернуться в чат</button></section>`;
+    bindActions(el, () => show("today"));
+    $("#chat").addEventListener("click", toChat);
+    $("#why").addEventListener("click", async () => {
+      openSheet(`<div class="skeleton"></div>`);
+      try { const w = await api(`/api/why?date=${t.today}`); openSheet(`<div class="label">объяснение engine</div><h2 id="sheetTitle" class="display" style="font-size:28px;margin:6px 0 12px">Почему так</h2>${rich(w.html)}<div class="row" style="margin-top:14px"><button class="btn primary" data-close>Понятно</button></div>`); }
+      catch (e) { closeSheet(); toast("Объяснение недоступно"); }
+    });
+  },
+  async calendar(el, start) {
+    const w = await api(`/api/week${start ? `?start=${start}` : ""}`);
+    const shift = (n) => { const d = D(w.week_start); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+    const done = w.days.reduce((a, d) => a + d.sessions.filter((s) => s.status === "done").length, 0);
+    const all = w.days.reduce((a, d) => a + d.sessions.length, 0);
+    el.innerHTML = `<section>
+        <div class="between" style="margin-bottom:10px"><button class="btn ghost" id="prev" aria-label="Предыдущая неделя">‹</button>
+          <div style="text-align:center"><div class="display" style="font-size:22px">${ddmm(w.days[0].date)} — ${ddmm(w.days[6].date)}</div>
+          <div class="label">${w.planned ? `выполнено ${done} из ${all}` : "плана нет"}</div></div>
+          <button class="btn ghost" id="next" aria-label="Следующая неделя">›</button></div>
+        <div class="week" role="group" aria-label="Неделя">${w.days.map((d) => { const dt = D(d.date), s = d.sessions[0];
+          const mark = d.sessions.map((x) => x.status === "done" ? "✓" : x.status === "missed" ? "×" : "").join(" ");
+          return `<button class="day ${d.date === w.today ? "is-today" : ""}" aria-pressed="false" data-date="${d.date}"
+            aria-label="${WD[dt.getUTCDay()]} ${ddmm(d.date)}: ${d.rest ? "отдых" : esc(d.sessions.map((x) => x.name).join(", "))}">
+            <span class="wd">${WD[dt.getUTCDay()]}</span><span class="dn">${dt.getUTCDate()}</span>
+            <span class="ty">${d.rest ? "—" : esc(d.sessions.map((x) => SHORT[x.type] || x.type).join(" + "))}</span>
+            ${d.sessions.some((x) => x.key) ? `<span class="keydot" title="ключевая"></span>` : ""}<span class="mk">${mark}</span></button>`; }).join("")}</div></section>
+      <section id="dayCard"></section>
+      <section><div class="row"><button class="btn ghost act" id="check">Обновить план</button></div>
+        <p class="muted">Перенос и изменения — сообщением в чат: «перенеси силовую на четверг».</p></section>`;
+    const open = async (date) => {
+      el.querySelectorAll(".day").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.date === date)));
+      $("#dayCard").innerHTML = `<div class="skeleton"></div>`;
+      const d = await api(`/api/day?date=${date}`);
+      $("#dayCard").innerHTML = (d.sessions.length ? d.sessions.map((s) => sessionCard(s, date)).join("") : `<div class="card"><div class="label">${esc(longDate(date))}</div><h2 class="display hero-title">Отдых</h2></div>`)
+        + `<div class="row" style="margin-top:12px">${actionButtons(date, d.actions)}${d.actions.analyze ? `<button class="btn ghost" data-hist>Разбор</button>` : ""}</div>
+           <details class="more" style="margin-top:10px"><summary>Подробно</summary>${rich(d.html)}</details>`;
+      bindActions($("#dayCard"), () => VIEWS.calendar(el, w.week_start));
+      const h = $("#dayCard [data-hist]"); if (h) h.addEventListener("click", () => show("history"));
+    };
+    el.querySelectorAll(".day").forEach((x) => x.addEventListener("click", () => open(x.dataset.date).catch(() => {})));
+    $("#prev").addEventListener("click", () => VIEWS.calendar(el, shift(-7)).catch(() => {}));
+    $("#next").addEventListener("click", () => VIEWS.calendar(el, shift(7)).catch(() => {}));
+    $("#check").addEventListener("click", (e) => doAct(e.target, "plan_check", {}));
+    await open(w.days.some((d) => d.date === w.today) ? w.today : w.days[0].date);
+  },
+  async history(el) {
+    el.innerHTML = `<section><input class="search" type="search" id="q" placeholder="Название или схема: пороговая 3×8" aria-label="Поиск тренировок" enterkeyhint="search">
+      <div class="label" id="count" style="margin-top:10px"></div><div id="list" style="margin-top:4px"></div></section>`;
+    let timer;
+    const render = async () => {
+      const q = $("#q").value.trim();
+      const h = await api(`/api/history${q ? `?q=${encodeURIComponent(q)}` : ""}`);
+      $("#count").textContent = q ? `найдено ${h.total}` : `последние ${h.items.length}`;
+      $("#list").innerHTML = h.items.length ? h.items.map((a) => { const d = D(a.date);
+        return `<button class="item" data-id="${esc(a.id)}" data-name="${esc(a.name)}">
+          <span class="when">${d.getUTCDate()}<small>${MON[d.getUTCMonth()]} · ${WD[d.getUTCDay()]}</small></span>
+          <span><span class="name">${esc(a.name)}</span><span class="meta" style="display:block">${a.minutes}′${a.load ? ` · ${Math.round(a.load)} TSS` : ""}${a.np ? ` · ${Math.round(a.np)} Вт` : ""}${a.hr ? ` · ${Math.round(a.hr)} уд` : " · без пульса"}</span></span>
+          <span>${a.analyzed ? `<span class="chip">разбор</span>` : ""}</span></button>`; }).join("")
+        : `<p class="empty">Ничего не нашёл. Можно спросить в чате: «найди пороговую 3×8».</p>`;
+      $("#list").querySelectorAll(".item").forEach((it) => it.addEventListener("click", () => openAnalysis(it.dataset.id, it.dataset.name)));
+    };
+    $("#q").addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(() => render().catch(() => {}), 300); });
+    await render();
+  },
+  async form(el) {
+    const f = await api("/api/form"), p = f.points;
+    if (!p.length) { el.innerHTML = `<p class="empty">Данных формы пока нет.</p>`; return; }
+    const lastOf = (k) => [...p].reverse().find((x) => x[k] != null);
+    const lc = lastOf("ctl"), la = lastOf("atl"), src = (k) => f.sources.find((s) => s.key === k);
+    const fresh = (s) => !s ? "" : !s.connected ? "не подключено" : s.last_success ? "обновлено " + fmtTs(s.last_success) : "ещё не обновлялось";
+    const health = [["hrv", "ВСР", "мс"], ["rhr", "Пульс покоя", "уд/мин"], ["sleep", "Сон", "ч"]];
+    el.innerHTML = `<section>
+        <div class="sec-head"><span class="label">90 дней · Intervals.icu · ${lc ? ddmm(lc.d) : "—"}</span></div>
+        <div class="stats">${lc ? `<div class="stat"><span class="label">CTL</span><span class="num">${lc.ctl.toFixed(0)}</span></div>` : ""}
+          ${la ? `<div class="stat"><span class="label">ATL</span><span class="num">${la.atl.toFixed(0)}</span></div>` : ""}
+          ${lc && la ? `<div class="stat"><span class="label">TSB</span><span class="num">${lc.ctl - la.atl > 0 ? "+" : ""}${(lc.ctl - la.atl).toFixed(0)}</span></div>` : ""}</div>
+        <div class="legend"><span><span class="dot" style="background:var(--series-1)"></span> CTL — фитнес</span>
+          <span><span class="dot" style="background:var(--series-2)"></span> ATL — усталость</span></div>
+        <div class="chart" id="c_load"></div></section>
+      <section class="small-multiples"><div class="sec-head"><span class="label">здоровье · часы через Intervals</span></div>
+        ${health.map(([k, t, u]) => { const l = lastOf(k), miss = p.filter((x) => x[k] == null).length;
+          return `<div class="sm"><div class="between"><span>${t}</span><span><span class="num" style="font-size:26px">${l ? l[k] : "—"}</span><span class="unit" style="font:12px var(--mono);color:var(--mute)"> ${u}</span></span></div>
+            <div class="between label"><span>${l ? "последнее " + ddmm(l.d) : "нет данных"}</span><span>${miss ? `пропуски ${miss} дн.` : "без пропусков"}</span></div>
+            <div class="chart" id="c_${k}"></div></div>`; }).join("")}
+        <p class="muted">Сон — Intervals; полнота записи — Garmin. Оценки Garmin (Body Battery, стресс) — контекст, в решения не входят.</p></section>
+      <section><div class="sec-head"><span class="label">источники</span></div><div class="kv">${f.sources.map((s) => `<div>${esc(s.label)}</div><div>${fresh(s)}</div>`).join("")}</div></section>`;
+    lineChart($("#c_load"), p, [["ctl", "var(--series-1)", "CTL"], ["atl", "var(--series-2)", "ATL"]], 170);
+    health.forEach(([k, t]) => lineChart($(`#c_${k}`), p, [[k, "var(--series-1)", t]], 70));
+  },
+  async more(el) {
+    const s = await api("/api/settings");
+    const st = (x) => !x.connected ? ["critical", "не подключено"] : x.stale ? ["warning", "устарело"] : ["good", x.last_success ? fmtTs(x.last_success) : "ещё нет"];
+    el.innerHTML = `<section><article class="card stack"><span class="label">strava</span><h2 class="display" style="font-size:30px;margin:4px 0">FIT → Strava</h2>
+        <p style="margin:0">Пришли готовый .fit файлом в чат. Бот проверит его, покажет сводку и предупредит о похожих активностях — в Strava файл уйдёт только после твоего подтверждения.</p>
+        <div class="row"><button class="btn primary" id="chat">Открыть чат</button></div></article></section>
+      <section><div class="sec-head"><span class="label">настройки</span></div>
+        <label class="switch"><span>Спрашивать самочувствие утром</span><input type="checkbox" class="act" id="subj" ${s.subjective ? "checked" : ""}></label>
+        <div class="kv"><div>Утренний план</div><div>${esc(s.morning)}</div><div>Подготовка к завтра</div><div>${esc(s.evening)}</div><div>План недели</div><div>${esc(s.weekly)}</div></div>
+        <p class="muted">Время брифингов меняется сообщением в чат.</p></section>
+      <section><div class="sec-head"><span class="label">источники данных</span></div>
+        <div class="kv">${s.sources.map((x) => { const [tone, txt] = st(x); return `<div><span class="dot" style="background:var(--${tone});margin-right:8px"></span>${esc(x.label)}</div><div>${esc(txt)}</div>`; }).join("")}</div></section>`;
+    $("#chat").addEventListener("click", toChat);
+    $("#subj").addEventListener("change", (e) => doAct(e.target, "subjective", { value: e.target.checked }));
+  },
+};
+
+async function openAnalysis(id, name) {
+  openSheet(`<div class="skeleton"></div>`);
+  let a;
+  try { a = await api(`/api/analysis?id=${encodeURIComponent(id)}`); } catch (e) { closeSheet(); toast("Разбор недоступен"); return; }
+  openSheet(`<div class="label">${a.html ? "разбор от " + ddmm(a.on) : "разбора ещё нет"}</div>
+    <h2 id="sheetTitle" class="display" style="font-size:30px;margin:6px 0 12px">${esc(name)}</h2>
+    ${a.html ? rich(a.html) : `<p class="muted">Разбор сделает тренер по данным Intervals.</p>`}
+    <div class="row" style="margin-top:16px"><button class="btn primary act" id="run">${a.html ? "Пересчитать разбор" : "Разобрать"}</button><button class="btn ghost" data-close>Закрыть</button></div>
+    ${a.html ? `<p class="muted">Пересчёт обновляет только разбор: выполнение и план не меняются.</p>` : ""}`);
+  $("#run").addEventListener("click", (e) => doAct(e.target, "analyze", { id, refresh: !!a.html }));
+}
+
+// Линии 2px, одна ось, пропуск данных — разрыв линии; перекрестие и подсказка с датой.
+function lineChart(el, data, series, h) {
+  const vals = data.flatMap((d) => series.map(([k]) => d[k])).filter((v) => v != null);
+  if (!vals.length) { el.innerHTML = `<p class="muted">Нет данных за период.</p>`; return; }
+  const W = Math.max(280, el.clientWidth || 320), pad = { l: 30, r: 6, t: 8, b: 18 };
+  const lo = Math.floor(Math.min(...vals)), hi = Math.ceil(Math.max(...vals)), span = Math.max(1, hi - lo);
+  const x = (i) => pad.l + (i / Math.max(1, data.length - 1)) * (W - pad.l - pad.r);
+  const y = (v) => pad.t + (1 - (v - lo) / span) * (h - pad.t - pad.b);
+  const path = (k) => { let s = "", pen = false;
+    data.forEach((d, i) => { if (d[k] == null) { pen = false; return; } s += `${pen ? "L" : "M"}${x(i).toFixed(1)},${y(d[k]).toFixed(1)}`; pen = true; });
+    return s; };
+  const last = (k) => { for (let i = data.length - 1; i >= 0; i--) if (data[i][k] != null) return i; return -1; };
+  el.innerHTML = `<svg width="${W}" height="${h}" role="img" aria-label="${series.map((s) => s[2]).join(", ")}">
+    <line x1="${pad.l}" x2="${W - pad.r}" y1="${y(hi)}" y2="${y(hi)}" stroke="var(--hair)"/>
+    <line x1="${pad.l}" x2="${W - pad.r}" y1="${y(lo)}" y2="${y(lo)}" stroke="var(--hair)"/>
+    <text x="0" y="${y(hi) + 3}">${hi}</text><text x="0" y="${y(lo) + 3}">${lo}</text>
+    <text x="${pad.l}" y="${h - 3}">${ddmm(data[0].d)}</text><text x="${W - pad.r}" y="${h - 3}" text-anchor="end">${ddmm(data[data.length - 1].d)}</text>
+    ${series.map(([k, c]) => { const i = last(k); return `<path d="${path(k)}" fill="none" stroke="${c}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`
+      + (i >= 0 ? `<circle cx="${x(i)}" cy="${y(data[i][k])}" r="4" fill="${c}" stroke="var(--paper)" stroke-width="2"/>` : ""); }).join("")}
+    <line class="cx" y1="${pad.t}" y2="${h - pad.b}" stroke="var(--mute)" stroke-dasharray="2 3" visibility="hidden"/>
+    <rect x="${pad.l}" y="0" width="${W - pad.l - pad.r}" height="${h}" fill="transparent"/></svg><div class="tip"></div>`;
+  const svg = el.querySelector("svg"), tip = el.querySelector(".tip"), cx = el.querySelector(".cx");
+  const move = (ev) => {
+    const r = svg.getBoundingClientRect(), px = (ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left;
+    const i = Math.max(0, Math.min(data.length - 1, Math.round(((px - pad.l) / (W - pad.l - pad.r)) * (data.length - 1))));
+    cx.setAttribute("x1", x(i)); cx.setAttribute("x2", x(i)); cx.setAttribute("visibility", "visible");
+    tip.style.display = "block"; tip.style.left = Math.max(0, Math.min(W - 170, x(i) - 60)) + "px"; tip.style.top = "-6px";
+    tip.textContent = `${ddmm(data[i].d)} · ` + series.map(([k, , n]) => `${n} ${data[i][k] ?? "нет данных"}`).join(" · ");
+  };
+  svg.addEventListener("pointermove", move); svg.addEventListener("touchmove", move, { passive: true });
+  svg.addEventListener("pointerleave", () => { tip.style.display = "none"; cx.setAttribute("visibility", "hidden"); });
+}
+
+show("today");
+</script>
+</body>
+</html>
