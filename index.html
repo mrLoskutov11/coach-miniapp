@@ -168,6 +168,10 @@ const longDate = (iso) => { const d = D(iso); return `${WD[d.getUTCDay()]}, ${d.
 const fmtTs = (t) => new Date(t).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 const SHORT = { endurance: "Z2", recovery: "Восст.", tempo: "Темп", sweet_spot: "SS", threshold: "Порог", vo2max: "VO2",
   anaerobic: "Анаэр.", sprint: "Спринт", long_ride: "Длит.", race_specific: "Спец.", strength: "Сила", race: "Старт", rest: "Отдых" };
+// стили карточки для Stories — те же ключи, что в exporters/story.STYLES (сервер проверяет ключ)
+const STORY_STYLES = [{ key: "number", name: "Цифра", about: "огромная контурная цифра, трек поверх" },
+  { key: "line", name: "Линия", about: "трек как графический знак" }, { key: "poster", name: "Постер", about: "наклонный заголовок, столбец цифр" },
+  { key: "caption", name: "Подпись", about: "компактный блок внизу" }, { key: "vertical", name: "Вертикаль", about: "показатели вдоль края" }];
 const REC = { green: ["good", "Готов к работе"], amber: ["warning", "Осторожно"], red: ["critical", "Отдых"] };
 
 // ---------- тема Telegram
@@ -460,9 +464,14 @@ async function openAnalysis(id, name) {
   openSheet(`<div class="label">${a.html ? "разбор от " + ddmm(a.on) : "разбора ещё нет"}</div>
     <h2 id="sheetTitle" class="display" style="font-size:30px;margin:6px 0 12px">${esc(name)}</h2>
     ${a.html ? rich(a.html) : `<p class="muted">Разбор сделает тренер по данным Intervals.</p>`}
-    <div class="row" style="margin-top:16px"><button class="btn primary act" id="run">${a.html ? "Пересчитать разбор" : "Разобрать"}</button><button class="btn ghost" data-close>Закрыть</button></div>
+    <div class="row" style="margin-top:16px"><button class="btn primary act" id="run">${a.html ? "Пересчитать разбор" : "Разобрать"}</button>
+      <button class="btn ghost" data-close>Закрыть</button></div>
+    <div class="label" style="margin-top:18px">для сторис · стиль карточки</div>
+    <div class="row" style="margin-top:8px">${STORY_STYLES.map((st) => `<button class="btn act" data-story="${st.key}" title="${esc(st.about)}">${esc(st.name)}</button>`).join("")}</div>
+    <p class="muted">Бот пришлёт в чат две прозрачные PNG документами — для светлого и тёмного фото.</p>
     ${a.html ? `<p class="muted">Пересчёт обновляет только разбор: выполнение и план не меняются.</p>` : ""}`);
   $("#run").addEventListener("click", (e) => doAct(e.target, "analyze", { id, refresh: !!a.html }));
+  $("#sheetBody").querySelectorAll("[data-story]").forEach((b) => b.addEventListener("click", () => doAct(b, "story", { id, style: b.dataset.story })));
 }
 
 // Линии 2px, одна ось, пропуск данных — разрыв линии; перекрестие и подсказка с датой.
