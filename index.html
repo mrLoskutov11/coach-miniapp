@@ -169,9 +169,9 @@ const fmtTs = (t) => new Date(t).toLocaleString("ru-RU", { day: "2-digit", month
 const SHORT = { endurance: "Z2", recovery: "Восст.", tempo: "Темп", sweet_spot: "SS", threshold: "Порог", vo2max: "VO2",
   anaerobic: "Анаэр.", sprint: "Спринт", long_ride: "Длит.", race_specific: "Спец.", strength: "Сила", race: "Старт", rest: "Отдых" };
 // стили карточки для Stories — те же ключи, что в exporters/story.STYLES (сервер проверяет ключ)
-const STORY_STYLES = [{ key: "clean", name: "Чистый", about: "небольшой трек и компактные показатели" },
-  { key: "hand", name: "Рукописный", about: "путевой дневник: штрих от руки, стрелки к заметкам" },
-  { key: "mixed", name: "Смешанный", about: "строгие цифры, рукописное название и заметки" }];
+const STORY_STYLES = [{ key: "map", name: "Карта", about: "крупный трек и ряд показателей" },
+  { key: "journal", name: "Журнал", about: "название антиквой, тонкая линия, цифры" },
+  { key: "list", name: "Список", about: "строки показателей с отточиями" }];
 const REC = { green: ["good", "Готов к работе"], amber: ["warning", "Осторожно"], red: ["critical", "Отдых"] };
 
 // ---------- тема Telegram
