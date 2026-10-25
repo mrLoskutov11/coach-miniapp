@@ -169,9 +169,9 @@ const fmtTs = (t) => new Date(t).toLocaleString("ru-RU", { day: "2-digit", month
 const SHORT = { endurance: "Z2", recovery: "Восст.", tempo: "Темп", sweet_spot: "SS", threshold: "Порог", vo2max: "VO2",
   anaerobic: "Анаэр.", sprint: "Спринт", long_ride: "Длит.", race_specific: "Спец.", strength: "Сила", race: "Старт", rest: "Отдых" };
 // стили карточки для Stories — те же ключи, что в exporters/story.STYLES (сервер проверяет ключ)
-const STORY_STYLES = [{ key: "number", name: "Цифра", about: "широкая цифра-контур, трек поверх" },
-  { key: "line", name: "Линия", about: "трек с градиентом от старта к финишу" }, { key: "bib", name: "Номер", about: "стартовый номер" },
-  { key: "caption", name: "Подпись", about: "компактный блок внизу" }, { key: "receipt", name: "Чек", about: "чек поездки с печатью" }];
+const STORY_STYLES = [{ key: "column", name: "Столбик", about: "узкий столбик по центру, как стикер Strava" },
+  { key: "corner", name: "Угол", about: "блок в левом нижнем углу" }, { key: "strip", name: "Строка", about: "одна строка по нижнему краю" },
+  { key: "top", name: "Сверху", about: "курсив и цифры у правого верхнего края" }, { key: "track", name: "Трек", about: "небольшой трек и строка под ним" }];
 const REC = { green: ["good", "Готов к работе"], amber: ["warning", "Осторожно"], red: ["critical", "Отдых"] };
 
 // ---------- тема Telegram
