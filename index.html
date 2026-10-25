@@ -66,7 +66,7 @@ section:first-child { border-top: 0; padding-top: 4px; }
 .stat + .stat { border-left: 1px solid var(--hair); padding-left: 12px; }
 .stat .num { font-size: 34px; display: block; margin-top: 4px; }
 .stat .unit { font: 500 12px var(--mono); color: var(--mute); margin-left: 2px; }
-.hero-title { font-size: 40px; margin: 6px 0 12px; overflow-wrap: anywhere; }
+.hero-title { font-size: clamp(26px, 9.2vw, 40px); margin: 6px 0 12px; overflow-wrap: break-word; hyphens: auto; }  /* «Восстановление» целиком на 375 px; длиннее — перенос по слогам, а не по букве */
 .profile { margin: 12px 0 4px; }
 .reasons { margin: 8px 0 0; padding: 0; list-style: none; }
 .reasons li { padding: 6px 0; border-top: 1px solid var(--hair); font-size: 14px; }
@@ -407,7 +407,7 @@ const VIEWS = {
       $("#list").innerHTML = h.items.length ? h.items.map((a) => { const d = D(a.date);
         return `<button class="item" data-id="${esc(a.id)}" data-name="${esc(a.name)}">
           <span class="when">${d.getUTCDate()}<small>${MON[d.getUTCMonth()]} · ${WD[d.getUTCDay()]}</small></span>
-          <span><span class="name">${esc(a.name)}</span><span class="meta" style="display:block">${a.minutes}′${a.load ? ` · ${Math.round(a.load)} TSS` : ""}${a.np ? ` · ${Math.round(a.np)} Вт` : ""}${a.hr ? ` · ${Math.round(a.hr)} уд` : " · без пульса"}</span></span>
+          <span><span class="name">${esc(a.name)}</span><span class="meta" style="display:block">${a.minutes ? `${a.minutes}′` : "время неизвестно"}${a.load ? ` · ${Math.round(a.load)} TSS` : ""}${a.np ? ` · ${Math.round(a.np)} Вт` : ""}${a.hr ? ` · ${Math.round(a.hr)} уд` : " · без пульса"}</span></span>
           <span>${a.analyzed ? `<span class="chip">разбор</span>` : ""}</span></button>`; }).join("")
         : `<p class="empty">Ничего не нашёл. Можно спросить в чате: «найди пороговую 3×8».</p>`;
       $("#list").querySelectorAll(".item").forEach((it) => it.addEventListener("click", () => openAnalysis(it.dataset.id, it.dataset.name)));
