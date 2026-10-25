@@ -464,13 +464,16 @@ async function openAnalysis(id, name) {
   openSheet(`<div class="label">${a.html ? "разбор от " + ddmm(a.on) : "разбора ещё нет"}</div>
     <h2 id="sheetTitle" class="display" style="font-size:30px;margin:6px 0 12px">${esc(name)}</h2>
     ${a.html ? rich(a.html) : `<p class="muted">Разбор сделает тренер по данным Intervals.</p>`}
-    <div class="row" style="margin-top:16px"><button class="btn primary act" id="run">${a.html ? "Пересчитать разбор" : "Разобрать"}</button>
+    <div class="row" style="margin-top:16px"><button class="btn primary" id="storyOpen" aria-expanded="false" aria-controls="storyPick">Для сторис</button>
+      <button class="btn act" id="run">${a.html ? "Пересчитать разбор" : "Разобрать"}</button>
       <button class="btn ghost" data-close>Закрыть</button></div>
-    <div class="label" style="margin-top:18px">для сторис · стиль карточки</div>
-    <div class="row" style="margin-top:8px">${STORY_STYLES.map((st) => `<button class="btn act" data-story="${st.key}" title="${esc(st.about)}">${esc(st.name)}</button>`).join("")}</div>
-    <p class="muted">Бот пришлёт в чат две прозрачные PNG документами — для светлого и тёмного фото.</p>
+    <div id="storyPick" hidden><div class="label" style="margin-top:18px">для сторис · выбери стиль</div>
+      <div class="row" style="margin-top:8px">${STORY_STYLES.map((st) => `<button class="btn act" data-story="${st.key}" title="${esc(st.about)}">${esc(st.name)}</button>`).join("")}</div>
+      <p class="muted">Бот пришлёт в чат две прозрачные PNG документами — для светлого и тёмного фото.</p></div>
     ${a.html ? `<p class="muted">Пересчёт обновляет только разбор: выполнение и план не меняются.</p>` : ""}`);
   $("#run").addEventListener("click", (e) => doAct(e.target, "analyze", { id, refresh: !!a.html }));
+  $("#storyOpen").addEventListener("click", (e) => { const p = $("#storyPick"); p.hidden = !p.hidden;
+    e.target.setAttribute("aria-expanded", String(!p.hidden)); if (!p.hidden) p.scrollIntoView({ block: "nearest", behavior: "smooth" }); });
   $("#sheetBody").querySelectorAll("[data-story]").forEach((b) => b.addEventListener("click", () => doAct(b, "story", { id, style: b.dataset.story })));
 }
 
