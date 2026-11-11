@@ -169,9 +169,9 @@ const fmtTs = (t) => new Date(t).toLocaleString("ru-RU", { day: "2-digit", month
 const SHORT = { endurance: "Z2", recovery: "Восст.", tempo: "Темп", sweet_spot: "SS", threshold: "Порог", vo2max: "VO2",
   anaerobic: "Анаэр.", sprint: "Спринт", long_ride: "Длит.", race_specific: "Спец.", strength: "Сила", race: "Старт", rest: "Отдых" };
 // стили карточки для Stories — те же ключи, что в exporters/story.STYLES (сервер проверяет ключ)
-const STORY_STYLES = [{ key: "map", name: "Карта", about: "крупный трек и ряд показателей" },
-  { key: "journal", name: "Журнал", about: "название антиквой, тонкая линия, цифры" },
-  { key: "list", name: "Список", about: "строки показателей с отточиями" }];
+const STORY_STYLES = [{ key: "map", name: "Маршрут", about: "силуэт и крупные показатели" },
+  { key: "journal", name: "Сетка", about: "две колонки показателей" },
+  { key: "list", name: "Строки", about: "показатели в компактных строках" }];
 const REC = { green: ["good", "Готов к работе"], amber: ["warning", "Осторожно"], red: ["critical", "Отдых"] };
 
 // ---------- тема Telegram
@@ -187,26 +187,25 @@ const API = (() => {
   const p = new URLSearchParams(location.search).get("api");
   if (p && API_RE.test(p)) { try { localStorage.setItem("coach-api", p); } catch (e) {} return p; }
   if (!/github\.io$/.test(location.hostname)) return "";  // открыто с самого Mac
-  const saved = localStorage.getItem("coach-api");
+  let saved;
+  try { saved = localStorage.getItem("coach-api"); } catch (e) {}
   return saved && API_RE.test(saved) ? saved : null;
 })();
-const CACHE = "coach-cache:";
-let lastFresh = null;
+// Live plans must never fall back to persisted snapshots.
+let lastFresh = null, athleteTimezone = "Europe/Moscow";
 async function api(path) {
   if (API === null) { status("no-api"); throw Object.assign(new Error("no api"), { offline: true }); }
   try {
-    const r = await fetch(API + path, { headers: { "X-Telegram-Init-Data": INIT }, cache: "no-store" });
+    const r = await fetch(API + path, { headers: { "X-Telegram-Init-Data": INIT }, cache: "no-store", signal: AbortSignal.timeout(20000) });
     if (r.status === 401) throw Object.assign(new Error("auth"), { auth: true });
     if (!r.ok) throw new Error(String(r.status));
     const data = await r.json();
-    try { localStorage.setItem(CACHE + path, JSON.stringify({ at: Date.now(), data })); } catch (e) {}
+    if (data.timezone) athleteTimezone = data.timezone;
     status(null); lastFresh = Date.now(); setFresh();
     return data;
   } catch (e) {
     if (e.auth) { status("auth"); throw e; }
-    const c = JSON.parse(localStorage.getItem(CACHE + path) || "null");
-    status("offline", c && c.at);
-    if (c) { lastFresh = c.at; setFresh(); return c.data; }
+    status("offline");
     throw Object.assign(e, { offline: true });
   }
 }
@@ -260,10 +259,10 @@ async function doAct(btn, name, body, after) {
   try {
     const r = await post(name, body);
     haptic(r.ok ? "success" : "warning");
-    if (r.html) openSheet(`<div class="label">Готово</div><h2 id="sheetTitle" class="display" style="font-size:28px;margin:6px 0 12px">${esc(btn.textContent)}</h2>${rich(r.html)}
+    if (r.html) openSheet(`<div class="label">${r.ok ? "Готово" : "Не выполнено"}</div><h2 id="sheetTitle" class="display" style="font-size:28px;margin:6px 0 12px">${esc(btn.textContent)}</h2>${rich(r.html)}
       <div class="row" style="margin-top:14px"><button class="btn primary" data-close>Закрыть</button></div>`);
     else toast(r.text || "Готово");
-    if (after) after();
+    if (r.ok && after && btn.isConnected) after();
   } catch (e) { haptic("error"); toast("Не получилось: Mac не отвечает. Попробуй позже или напиши в чат."); }
   finally { btn.disabled = false; }
 }
@@ -273,12 +272,16 @@ const TABS = { today: ["Сегодня", ""], calendar: ["План", "кален
 let current = null;
 async function show(name) {
   current = name;
+  closeSheet();
+  const el = document.createElement("main");
+  el.id = "view"; el.tabIndex = -1;
+  $("#view").replaceWith(el);
   $("#title").textContent = TABS[name][0];
   $("#kicker").textContent = TABS[name][1];
   document.querySelectorAll("nav.tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
   $("#view").innerHTML = `<div class="skeleton"></div>`;
   try { await VIEWS[name]($("#view")); }
-  catch (e) { if (current === name) $("#view").innerHTML = `<p class="empty">${e.auth ? "Нет доступа." : "Данных нет: Mac не отвечает, а на телефоне ещё ничего не сохранено."}</p>`; }
+  catch (e) { if (el.isConnected) el.innerHTML = `<p class="empty">${e.auth ? "Нет доступа." : "Не удалось получить актуальные данные. Проверь связь и открой приложение заново из меню бота."}</p>`; }
   window.scrollTo(0, 0);
 }
 document.querySelectorAll("nav.tabs button").forEach((b) => b.addEventListener("click", () => { if (tg && tg.HapticFeedback) tg.HapticFeedback.selectionChanged(); show(b.dataset.tab); }));
@@ -335,10 +338,11 @@ function recoveryBlock(r) {
 const VIEWS = {
   async today(el) {
     const t = await api("/api/today");
+    if (!el.isConnected) return;
     $("#kicker").textContent = longDate(t.today);
     const f = t.form;
     el.innerHTML = `
-      <section>${t.sessions.length ? t.sessions.map((s) => sessionCard(s, t.today)).join("") : `<div class="card"><div class="label">${esc(longDate(t.today))}</div><h2 class="display hero-title">Отдых</h2></div>`}
+      <section>${t.sessions.length ? t.sessions.map((s) => sessionCard(s, t.today)).join("") : `<div class="card"><div class="label">${esc(longDate(t.today))}</div><h2 class="display hero-title">${t.planned ? "Отдых" : "Плана нет"}</h2></div>`}
         <div class="row" style="margin-top:12px">${actionButtons(t.today, t.actions)}<button class="btn ghost" id="why">Почему так</button></div>
         <details class="more" style="margin-top:10px"><summary>Карточка дня полностью</summary>${rich(t.plan_html)}</details></section>
       <section>${recoveryBlock(t.recovery)}</section>
@@ -361,7 +365,14 @@ const VIEWS = {
     });
   },
   async calendar(el, start) {
-    const w = await api(`/api/week${start ? `?start=${start}` : ""}`);
+    const request = (el.calendarRequest || 0) + 1;
+    el.calendarRequest = request;
+    el.innerHTML = `<div class="skeleton"></div>`;
+    let w;
+    try { w = await api(`/api/week${start ? `?start=${start}` : ""}`); }
+    catch (e) { if (el.isConnected && el.calendarRequest === request) el.innerHTML = `<p class="empty">Не удалось загрузить неделю. Открой план ещё раз.</p>`; return; }
+    const active = () => el.isConnected && el.calendarRequest === request;
+    if (!active()) return;
     const shift = (n) => { const d = D(w.week_start); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
     const done = w.days.reduce((a, d) => a + d.sessions.filter((s) => s.status === "done").length, 0);
     const all = w.days.reduce((a, d) => a + d.sessions.length, 0);
@@ -380,11 +391,17 @@ const VIEWS = {
       <section id="dayCard"></section>
       <section><div class="row"><button class="btn ghost act" id="check">Обновить план</button></div>
         <p class="muted">Перенос и изменения — сообщением в чат: «перенеси силовую на четверг».</p></section>`;
+    let dayRequest = 0;
     const open = async (date) => {
+      const selected = ++dayRequest;
       el.querySelectorAll(".day").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.date === date)));
       $("#dayCard").innerHTML = `<div class="skeleton"></div>`;
-      const d = await api(`/api/day?date=${date}`);
-      $("#dayCard").innerHTML = (d.sessions.length ? d.sessions.map((s) => sessionCard(s, date)).join("") : `<div class="card"><div class="label">${esc(longDate(date))}</div><h2 class="display hero-title">Отдых</h2></div>`)
+      let d;
+      try { d = await api(`/api/day?date=${date}`); }
+      catch (e) { if (active() && selected === dayRequest) $("#dayCard").innerHTML = `<p class="empty">Не удалось загрузить ${esc(longDate(date))}. Выбери день ещё раз.</p>`; return; }
+      if (!active() || selected !== dayRequest) return;
+      if (d.date !== date) { $("#dayCard").innerHTML = `<p class="empty">Ответ не соответствует выбранной дате.</p>`; return; }
+      $("#dayCard").innerHTML = (d.sessions.length ? d.sessions.map((s) => sessionCard(s, date)).join("") : `<div class="card"><div class="label">${esc(longDate(date))}</div><h2 class="display hero-title">${d.planned ? "Отдых" : "Плана нет"}</h2></div>`)
         + `<div class="row" style="margin-top:12px">${actionButtons(date, d.actions)}${d.actions.analyze ? `<button class="btn ghost" data-hist>Разбор</button>` : ""}</div>
            <details class="more" style="margin-top:10px"><summary>Подробно</summary>${rich(d.html)}</details>`;
       bindActions($("#dayCard"), () => VIEWS.calendar(el, w.week_start));
@@ -399,10 +416,13 @@ const VIEWS = {
   async history(el) {
     el.innerHTML = `<section><input class="search" type="search" id="q" placeholder="Название или схема: пороговая 3×8" aria-label="Поиск тренировок" enterkeyhint="search">
       <div class="label" id="count" style="margin-top:10px"></div><div id="list" style="margin-top:4px"></div></section>`;
-    let timer;
+    let timer, searchRequest = 0;
     const render = async () => {
+      if (!el.isConnected) return;
+      const request = ++searchRequest;
       const q = $("#q").value.trim();
       const h = await api(`/api/history${q ? `?q=${encodeURIComponent(q)}` : ""}`);
+      if (!el.isConnected || request !== searchRequest) return;
       $("#count").textContent = q ? `найдено ${h.total}` : `последние ${h.items.length}`;
       $("#list").innerHTML = h.items.length ? h.items.map((a) => { const d = D(a.date);
         return `<button class="item" data-id="${esc(a.id)}" data-name="${esc(a.name)}">
@@ -417,6 +437,7 @@ const VIEWS = {
   },
   async form(el) {
     const f = await api("/api/form"), p = f.points;
+    if (!el.isConnected) return;
     if (!p.length) { el.innerHTML = `<p class="empty">Данных формы пока нет.</p>`; return; }
     const lastOf = (k) => [...p].reverse().find((x) => x[k] != null);
     const lc = lastOf("ctl"), la = lastOf("atl"), src = (k) => f.sources.find((s) => s.key === k);
@@ -442,6 +463,7 @@ const VIEWS = {
   },
   async more(el) {
     const s = await api("/api/settings");
+    if (!el.isConnected) return;
     const st = (x) => !x.connected ? ["critical", "не подключено"] : x.stale ? ["warning", "устарело"] : ["good", x.last_success ? fmtTs(x.last_success) : "ещё нет"];
     el.innerHTML = `<section><article class="card stack"><span class="label">strava</span><h2 class="display" style="font-size:30px;margin:4px 0">FIT → Strava</h2>
         <p style="margin:0">Пришли готовый .fit файлом в чат. Бот проверит его, покажет сводку и предупредит о похожих активностях — в Strava файл уйдёт только после твоего подтверждения.</p>
@@ -510,6 +532,13 @@ function lineChart(el, data, series, h) {
   svg.addEventListener("pointerleave", () => { tip.style.display = "none"; cx.setAttribute("visibility", "hidden"); });
 }
 
+// Refresh after sleep/backgrounding and across midnight in the athlete's timezone.
+let visibleDate = new Intl.DateTimeFormat("en-CA", { timeZone: athleteTimezone }).format(new Date());
+document.addEventListener("visibilitychange", () => { if (!document.hidden && current) show(current); });
+setInterval(() => {
+  const now = new Intl.DateTimeFormat("en-CA", { timeZone: athleteTimezone }).format(new Date());
+  if (!document.hidden && now !== visibleDate) { visibleDate = now; show(current || "today"); }
+}, 30000);
 show("today");
 </script>
 </body>
