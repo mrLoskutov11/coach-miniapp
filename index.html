@@ -301,7 +301,7 @@ function profile(steps, h = 64) {
 }
 function sessionCard(s, date, actions) {
   const hm = (m) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
-  const st = s.status === "done" ? "выполнено" : s.status === "missed" ? "пропущено" : s.status === "replaced" ? "заменено" : "в плане";
+  const st = s.status === "done" ? "выполнено" : s.status === "unverified" ? "выполнение не подтверждено" : s.status === "missed" ? "пропущено" : s.status === "replaced" ? "заменено" : "в плане";
   return `<article class="card stack">
     <div class="between"><span class="label">${esc(longDate(date))}</span>
       <span class="row">${s.key ? `<span class="chip key">ключевая</span>` : ""}<span class="chip">${st}</span></span></div>
