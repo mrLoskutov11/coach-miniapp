@@ -66,6 +66,11 @@ section:first-child { border-top: 0; padding-top: 4px; }
 .stat + .stat { border-left: 1px solid var(--hair); padding-left: 12px; }
 .stat .num { font-size: 34px; display: block; margin-top: 4px; }
 .stat .unit { font: 500 12px var(--mono); color: var(--mute); margin-left: 2px; }
+.session-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.session-target { margin: 10px 0 0; font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
+.session-target .muted { display: block; margin-top: 2px; }
+.session-update { margin: 8px 0 0; padding-left: 9px; border-left: 3px solid var(--signal); font-size: 13px; }
+main section > .card + .card { margin-top: 10px; }
 .hero-title { font-size: clamp(26px, 9.2vw, 40px); margin: 6px 0 12px; overflow-wrap: break-word; hyphens: auto; }  /* «Восстановление» целиком на 375 px; длиннее — перенос по слогам, а не по букве */
 .profile { margin: 12px 0 4px; }
 .reasons { margin: 8px 0 0; padding: 0; list-style: none; }
@@ -258,12 +263,17 @@ async function doAct(btn, name, body, after) {
   btn.disabled = true;
   try {
     const r = await post(name, body);
-    haptic(r.ok ? "success" : "warning");
-    if (r.html) openSheet(`<div class="label">${r.ok ? "Готово" : "Не выполнено"}</div><h2 id="sheetTitle" class="display" style="font-size:28px;margin:6px 0 12px">${esc(btn.textContent)}</h2>${rich(r.html)}
-      <div class="row" style="margin-top:14px"><button class="btn primary" data-close>Закрыть</button></div>`);
-    else toast(r.text || "Готово");
-    if (r.ok && after && btn.isConnected) after();
-  } catch (e) { haptic("error"); toast("Не получилось: Mac не отвечает. Попробуй позже или напиши в чат."); }
+    if (!btn.isConnected) return;
+    const queued = r.ok && (r.status === "queued" || name === "plan_check");
+    if (!queued) haptic(r.ok ? "success" : "warning");
+    if (r.html) {
+      const label = queued ? "" : `<div class="label">${r.ok ? "Готово" : "Не выполнено"}</div>`;
+      const title = queued ? "Проверяем план" : btn.textContent;
+      openSheet(`${label}<h2 id="sheetTitle" class="display" style="font-size:28px;margin:6px 0 12px">${esc(title)}</h2>${rich(r.html)}
+        <div class="row" style="margin-top:14px"><button class="btn primary" data-close>Закрыть</button></div>`);
+    } else toast(r.text || "Готово");
+    if (r.ok && after) after();
+  } catch (e) { if (btn.isConnected) { haptic("error"); toast("Не получилось: Mac не отвечает. Попробуй позже или напиши в чат."); } }
   finally { btn.disabled = false; }
 }
 
@@ -299,17 +309,25 @@ function profile(steps, h = 64) {
     ${bars}<line x1="0" x2="${W}" y1="${ftp}" y2="${ftp}" stroke="var(--series-1)" stroke-dasharray="6 6" vector-effect="non-scaling-stroke"/></svg>
     <div class="between label"><span>структура · высота = мощность</span><span style="color:var(--series-1)">— 100% FTP</span></div>`;
 }
-function sessionCard(s, date, actions) {
+function sessionCard(s, date) {
   const hm = (m) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
-  const st = s.status === "done" ? "выполнено" : s.status === "unverified" ? "выполнение не подтверждено" : s.status === "missed" ? "пропущено" : s.status === "replaced" ? "заменено" : "в плане";
+  const status = { planned: "в плане", done: s.type === "strength" ? "выполнено" : "поездка записана", unverified: "выполнение не подтверждено",
+    missed: "пропущено", replaced: "заменено", cancelled: "отменено" }[s.status];
+  const removed = s.status === "cancelled" || s.status === "replaced";
+  const reviews = s.reviews || [];
   return `<article class="card stack">
     <div class="between"><span class="label">${esc(longDate(date))}</span>
-      <span class="row">${s.key ? `<span class="chip key">ключевая</span>` : ""}<span class="chip">${st}</span></span></div>
+      <span class="row">${s.key && !removed ? `<span class="chip key">ключевая</span>` : ""}
+        ${status ? `<span class="chip">${status}</span>` : ""}</span></div>
+    ${s.update ? `<p class="session-update"><strong>Обновлено</strong> · ${esc(s.update)}</p>` : ""}
     <h2 class="display hero-title">${esc(s.name)}</h2>
-    <div class="stats"><div class="stat"><span class="label">время</span><span class="num">${hm(s.minutes)}</span></div>
-      <div class="stat"><span class="label">нагрузка</span><span class="num">${s.load ?? "—"}<span class="unit">TSS</span></span></div>
-      <div class="stat"><span class="label">тип</span><span class="num" style="font-size:24px">${esc(SHORT[s.type] || s.type)}</span></div></div>
-    ${profile(s.steps)}
+    ${removed ? "" : `<div class="stats session-stats"><div class="stat"><span class="label">время</span><span class="num">${hm(s.minutes)}</span></div>
+      <div class="stat"><span class="label">нагрузка</span><span class="num">${s.load ?? "—"}<span class="unit">TSS</span></span></div></div>
+      ${s.target || s.venue ? `<p class="session-target">${s.target ? `<strong>${esc(s.target)}</strong>` : ""}
+        ${s.venue ? `<span class="muted">${esc(s.venue)}</span>` : ""}</p>` : ""}
+      ${profile(s.steps)}`}
+    ${reviews.length ? `<div class="row">${reviews.map((r) =>
+      `<button class="btn ghost" data-a="review" data-id="${esc(r.id)}" data-name="${esc(r.name)}">Разбор${reviews.length > 1 ? `: ${esc(r.name)}` : ""}</button>`).join("")}</div>` : ""}
   </article>`;
 }
 function actionButtons(date, a) {
@@ -323,15 +341,17 @@ function bindActions(root, refresh) {
     if (a === "zwift") doAct(b, "zwift", { date: d });
     if (a === "zwift_alt") doAct(b, "zwift", { date: d, alternative: true });
     if (a === "swap") doAct(b, "swap", { date: d }, refresh);
+    if (a === "review") openAnalysis(b.dataset.id, b.dataset.name);
   }));
 }
 function recoveryBlock(r) {
-  const [tone, label] = REC[r.level] || REC.green;
-  const flags = [r.rest && "день отдыха", r.no_intensity && "без интенсивности"].filter(Boolean);
-  return `<div class="between"><span class="label">восстановление · engine</span>
+  const [tone, label] = r.rest ? REC.red : r.level === "red" || r.no_intensity ? REC.amber
+    : r.level === "green" && r.confidence === "low" ? ["warning", "Мало данных"] : REC[r.level] || REC.green;
+  const flags = [r.no_intensity && !r.rest && "без интенсивности"].filter(Boolean);
+  return `<div class="between"><span class="label">Восстановление</span>
       <span class="chip"><span class="dot" style="background:var(--${tone})"></span>${label}</span></div>
     ${flags.length ? `<div class="muted" style="margin-top:6px">${flags.join(" · ")}</div>` : ""}
-    ${r.reasons.length ? `<ul class="reasons">${r.reasons.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : `<p class="muted">Признаков недовосстановления нет.</p>`}`;
+    ${r.reasons.length ? `<ul class="reasons">${r.reasons.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : r.confidence === "low" ? "" : `<p class="muted">Признаков недовосстановления нет.</p>`}`;
 }
 
 // ---------- экраны
@@ -342,7 +362,8 @@ const VIEWS = {
     $("#kicker").textContent = longDate(t.today);
     const f = t.form;
     el.innerHTML = `
-      <section>${t.sessions.length ? t.sessions.map((s) => sessionCard(s, t.today)).join("") : `<div class="card"><div class="label">${esc(longDate(t.today))}</div><h2 class="display hero-title">${t.planned ? "Отдых" : "Плана нет"}</h2></div>`}
+      <section>${t.sessions.length ? t.sessions.map((s) => sessionCard(s, t.today)).join("") : `<div class="card"><div class="label">${esc(longDate(t.today))}</div><h2 class="display hero-title">${t.planned ? "Отдых" : "Плана нет"}</h2>
+        ${t.recovery.rest && t.recovery.reasons[0] ? `<p class="session-update">${esc(t.recovery.reasons[0])}</p>` : ""}</div>`}
         <div class="row" style="margin-top:12px">${actionButtons(t.today, t.actions)}<button class="btn ghost" id="why">Почему так</button></div>
         <details class="more" style="margin-top:10px"><summary>Карточка дня полностью</summary>${rich(t.plan_html)}</details></section>
       <section>${recoveryBlock(t.recovery)}</section>
@@ -356,7 +377,7 @@ const VIEWS = {
           <div class="num">${m.value == null ? `<span class="muted" style="font:13px var(--body)">нет данных</span>` : esc(m.value) + (m.unit ? `<span class="unit"> ${esc(m.unit)}</span>` : "")}</div></div>`).join("")}</section>
       <section><details class="more"><summary>Состояние полностью</summary>${rich(t.state_html)}</details>
         <p class="muted">Самочувствие, боль, время на тренировку — напиши в чат.</p><button class="btn ghost" id="chat">Вернуться в чат</button></section>`;
-    bindActions(el, () => show("today"));
+    bindActions(el, () => VIEWS.today(el).catch(() => {}));
     $("#chat").addEventListener("click", toChat);
     $("#why").addEventListener("click", async () => {
       openSheet(`<div class="skeleton"></div>`);
@@ -364,7 +385,7 @@ const VIEWS = {
       catch (e) { closeSheet(); toast("Объяснение недоступно"); }
     });
   },
-  async calendar(el, start) {
+  async calendar(el, start, selectedDate) {
     const request = (el.calendarRequest || 0) + 1;
     el.calendarRequest = request;
     el.innerHTML = `<div class="skeleton"></div>`;
@@ -389,7 +410,7 @@ const VIEWS = {
             <span class="ty">${d.rest ? "—" : esc(d.sessions.map((x) => SHORT[x.type] || x.type).join(" + "))}</span>
             ${d.sessions.some((x) => x.key) ? `<span class="keydot" title="ключевая"></span>` : ""}<span class="mk">${mark}</span></button>`; }).join("")}</div></section>
       <section id="dayCard"></section>
-      <section><div class="row"><button class="btn ghost act" id="check">Обновить план</button></div>
+      <section><div class="row"><button class="btn ghost act" id="check">Проверить план</button></div>
         <p class="muted">Перенос и изменения — сообщением в чат: «перенеси силовую на четверг».</p></section>`;
     let dayRequest = 0;
     const open = async (date) => {
@@ -402,16 +423,16 @@ const VIEWS = {
       if (!active() || selected !== dayRequest) return;
       if (d.date !== date) { $("#dayCard").innerHTML = `<p class="empty">Ответ не соответствует выбранной дате.</p>`; return; }
       $("#dayCard").innerHTML = (d.sessions.length ? d.sessions.map((s) => sessionCard(s, date)).join("") : `<div class="card"><div class="label">${esc(longDate(date))}</div><h2 class="display hero-title">${d.planned ? "Отдых" : "Плана нет"}</h2></div>`)
-        + `<div class="row" style="margin-top:12px">${actionButtons(date, d.actions)}${d.actions.analyze ? `<button class="btn ghost" data-hist>Разбор</button>` : ""}</div>
+        + `<div class="row" style="margin-top:12px">${actionButtons(date, d.actions)}</div>
            <details class="more" style="margin-top:10px"><summary>Подробно</summary>${rich(d.html)}</details>`;
-      bindActions($("#dayCard"), () => VIEWS.calendar(el, w.week_start));
-      const h = $("#dayCard [data-hist]"); if (h) h.addEventListener("click", () => show("history"));
+      bindActions($("#dayCard"), () => VIEWS.calendar(el, w.week_start, date).catch(() => {}));
     };
     el.querySelectorAll(".day").forEach((x) => x.addEventListener("click", () => open(x.dataset.date).catch(() => {})));
     $("#prev").addEventListener("click", () => VIEWS.calendar(el, shift(-7)).catch(() => {}));
     $("#next").addEventListener("click", () => VIEWS.calendar(el, shift(7)).catch(() => {}));
     $("#check").addEventListener("click", (e) => doAct(e.target, "plan_check", {}));
-    await open(w.days.some((d) => d.date === w.today) ? w.today : w.days[0].date);
+    await open(w.days.find((d) => d.date === selectedDate)?.date
+      || w.days.find((d) => d.date === w.today)?.date || w.days[0].date);
   },
   async history(el) {
     el.innerHTML = `<section><input class="search" type="search" id="q" placeholder="Название или схема: пороговая 3×8" aria-label="Поиск тренировок" enterkeyhint="search">
@@ -480,10 +501,14 @@ const VIEWS = {
 };
 
 async function openAnalysis(id, name) {
-  openSheet(`<div class="skeleton"></div>`);
+  openSheet(`<div id="sheetTitle" role="status">Загружаем разбор…</div>`);
+  const loading = $("#sheetTitle");
+  const active = () => loading.isConnected && $("#sheet").classList.contains("open");
   let a;
-  try { a = await api(`/api/analysis?id=${encodeURIComponent(id)}`); } catch (e) { closeSheet(); toast("Разбор недоступен"); return; }
-  openSheet(`<div class="label">${a.html ? "разбор от " + ddmm(a.on) : "разбора ещё нет"}</div>
+  try { a = await api(`/api/analysis?id=${encodeURIComponent(id)}`); }
+  catch (e) { if (active()) { closeSheet(); toast("Разбор недоступен"); } return; }
+  if (!active()) return;
+  openSheet(`<div class="label">${a.html ? (a.on ? "разбор от " + ddmm(a.on) : "разбор") : "разбора ещё нет"}</div>
     <h2 id="sheetTitle" class="display" style="font-size:30px;margin:6px 0 12px">${esc(name)}</h2>
     ${a.html ? rich(a.html) : `<p class="muted">Разбор сделает тренер по данным Intervals.</p>`}
     <div class="row" style="margin-top:16px"><button class="btn primary" id="storyOpen" aria-expanded="false" aria-controls="storyPick">Для сторис</button>
